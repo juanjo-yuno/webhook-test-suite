@@ -39,6 +39,7 @@ EVENT_TYPES = [
     "payment.captured",
     "payment.declined",
     "payment.settled",
+    "payment.chargeback",
 ]
 
 
@@ -88,6 +89,8 @@ def on_test_stop(environment, **kwargs):
     """Stop the MerchantWebhookServer and report delivery stats."""
     global _server
 
+    received = 0
+
     if _server is not None:
         received = _server.get_processed_count()
         _server.stop()
@@ -116,16 +119,29 @@ def on_test_stop(environment, **kwargs):
         logger.info("Event loss rate: %.2f%% (target: 0%%)", loss_rate)
 
         if success_rate < 99.0:
+            environment.process_exit_code = 1
             logger.error(
                 "ASSERTION FAILED: Success rate %.2f%% is below 99%% threshold",
                 success_rate,
             )
         if received < total_sent:
-            logger.warning(
-                "ASSERTION WARNING: %d events lost (%d sent, %d received)",
+            environment.process_exit_code = 1
+            logger.error(
+                "ASSERTION FAILED: %d events lost (%d sent, %d received)",
                 total_sent - received,
                 total_sent,
                 received,
+            )
+
+    # Latency assertion: p95 response time must be below 5000ms (5s)
+    for stat in environment.runner.stats.entries.values():
+        p95 = stat.get_response_time_percentile(0.95)
+        if p95 and p95 > 5000:
+            environment.process_exit_code = 1
+            logger.error(
+                "ASSERTION FAILED: p95 latency %dms exceeds 5000ms for '%s'",
+                p95,
+                stat.name,
             )
 
 

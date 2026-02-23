@@ -1,6 +1,6 @@
 import json
 import threading
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import HTTPServer, ThreadingHTTPServer, BaseHTTPRequestHandler
 from typing import Self
 
 from src.utils.crypto import verify_signature
@@ -115,7 +115,7 @@ class MerchantWebhookServer:
             "processed_event_ids": set(),
             "lock": threading.Lock(),
         }
-        self._server: HTTPServer | None = None
+        self._server: ThreadingHTTPServer | None = None
         self._thread: threading.Thread | None = None
 
     def set_response_code(self, code: int) -> Self:
@@ -135,7 +135,7 @@ class MerchantWebhookServer:
         return self
 
     def start(self) -> None:
-        self._server = HTTPServer((self._host, self._port), _WebhookHandler)
+        self._server = ThreadingHTTPServer((self._host, self._port), _WebhookHandler)
         self._server.config = self._config  # type: ignore[attr-defined]
         # Get the actual port (useful when port=0)
         self._port = self._server.server_address[1]
